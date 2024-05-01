@@ -8,7 +8,16 @@ The data is the 2022 public use microdata files from the Canadian Labour Force S
 The sample was restricted to full-time workers. Total sample size was just under 700k observations.
 
 - NA's were kept because they get dropped when running regressions anyways
-- Variable of interest were gender, immigration status, and hourly wage. Additional variables I control for were: age, education attainment, marital status, indicator of child under 6, industry type, different occupations, province, and survey month. 
+- Variable of interest were gender, immigration status, and hourly wage. 
+- Additional variables I control for were: age, education attainment, marital status, indicator of child under 6, industry type, different occupations, province, and survey month. 
 
+## Analysis
+To answer my assignment I perform the following: 
 
+- Descriptive statistics
+- OLS regression
+- Frisch-Waugh-Lovell Theorem 
+- OLS regression with interaction terms
+- OLS regresssion using robust standard errors
+- OLS regression using clustered standard errors
 
