@@ -1,5 +1,5 @@
 # Labour-Force-Analysis
-The goal of this project was to describe the relationship between job experience and hourly wages among full time workers in Canada. Additionally, I did tests whether the relationship varies by immigration status or gender. 
+The goal of this project was to describe the relationship between job experience and hourly wages among full time workers in Canada. I also tested whether the relationship varies by immigration status or gender. 
 
 ## Data 
 The data is the 2022 public use microdata files from the Canadian Labour Force Survey. It can be found on the StatCan website: (https://www150.statcan.gc.ca\/n1\/pub\/71m0001x\/71m0001x2021001-eng.html). All 12 months were used.
