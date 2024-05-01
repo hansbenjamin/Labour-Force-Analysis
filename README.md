@@ -1,5 +1,5 @@
 # Labour-Force-Analysis
-This applied assignment was part of my graduate course in Econometrics. The goal was to describe the relationship between job experience and hourly wages among full time workers in Canada. Additionally, I did tests whether the relationship varies by immigration status or gender. 
+The goal of this project was to describe the relationship between job experience and hourly wages among full time workers in Canada. Additionally, I did tests whether the relationship varies by immigration status or gender. 
 
 ## Data 
 The data is the 2022 public use microdata files from the Canadian Labour Force Survey. It can be found on the StatCan website: (https://www150.statcan.gc.ca\/n1\/pub\/71m0001x\/71m0001x2021001-eng.html). All 12 months were used.
@@ -21,3 +21,5 @@ To answer my assignment I perform the following:
 - OLS regresssion using robust standard errors
 - OLS regression using clustered standard errors
 
+## Acknowledgements
+This project was an assignment for ECON 835 at Simon Fraser University taught by Professor Kevin Schnepel. 
