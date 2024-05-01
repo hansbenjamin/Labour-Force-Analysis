@@ -1,0 +1,245 @@
+---
+title: Canadian Labour Force Analysis
+author: Hans Nuque
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: pdf_document
+bibliography: ref.bib
+nocite: |
+  "@*"
+---
+
+```{r, setup, include=FALSE}
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(modelsummary)
+library(modelr)
+library(estimatr)
+library(texreg)
+library(gt)
+library(gtsummary)
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+# Load Data ---------------------------------------------------------------
+
+# Get working directory
+# here()
+
+# Load all 12 files
+months_2022 <- sprintf("data/pub%02d22.csv", 1:12)
+
+# Create a data frame that I will combine all the surveys into
+dt_2022 <- data.frame()
+
+# Create a function that will load all the data then append them
+for (i in months_2022){
+  dt <- read_csv(i)
+  dt_2022 <- rbind(dt_2022, dt)
+}
+
+# Data Cleaning -----------------------------------------------------------
+
+clean_2022 <- dt_2022 %>%
+  # Select only the relevant variables for the analysis 
+  select(SEX, HRLYEARN, TENURE, IMMIG, AGE_12, EDUC, MARSTAT, EFAMTYPE, AGYOWNK, 
+         NAICS_21, NOC_43, PROV, SURVMNTH, LFSSTAT) %>%
+  filter(LFSSTAT == 1) %>%  # Keep only FT workers
+  mutate(
+    hourlyearn = HRLYEARN / 100,  # Convert cents to dollars
+    jobtenure = TENURE / 12,  # Convert months to years
+    female = as.integer(SEX == 2),  # Female dummy (0 or 1)
+    immigrant = as.integer(IMMIG != 3),  # Immigrant dummy (0 or 1)
+    ychild = as.integer(AGYOWNK == 1),  # Young child dummy (0 or 1)
+    ychild_clean = if_else(is.na(ychild), 0, ychild)  # Clean NA in young child dummy
+  ) %>%
+  # Select new and cleaned columns
+  select(hourlyearn, jobtenure, female, immigrant, ychild_clean, AGE_12, EDUC, 
+         MARSTAT, EFAMTYPE, NAICS_21, NOC_43, PROV, SURVMNTH, LFSSTAT)
+
+# Summary Statistics ------------------------------------------------------
+
+# Rename variables for readability
+sum_stat <- clean_2022 %>%
+  select(
+    `Hourly Earnings` = hourlyearn,
+    `Job Tenure (yrs)` = jobtenure,
+    `Female` = female,
+    `Immigrant` = immigrant,
+    `Young Child?` = ychild_clean,
+    `Age` = AGE_12
+  )
+```
+
+
+# Introduction
+
+One of the first topics students in econometrics is the relationship between job tenure and wages. In theory, we expect that the more work experience an individual has, the higher wages they should be earning. Intuitively, they are learning skills within the workplace that develops their productivity towards a company. In addition, minority groups may experience lower average hourly wages. Nobel Prize winner Claudia Goldin shows that females experience a wage gap largely due to giving birth to their first child which causes a reduction in work hours [@gold]. While research show that immigrants who are visible minorities experience an earnings gap of almost 16 percent [@kp]. In the same paper, immigrants who studied in Canada, still faced an earnings gap. This result leads to a different implication, other than education, among immigrants. This paper will examine two outcomes. First, what are the returns to experience with an employer on earnings? Secondly, how do these earnings vary among females and immigrants? 
+
+# Data Description
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# I only want to present these variables on the table
+sum_stat <- clean_2022 %>% 
+  select(hourlyearn, jobtenure, female, immigrant,ychild_clean, AGE_12)
+datasummary_balance(~1, 
+                    sum_stat,
+                    title = "LFS 2022 Summary"
+                    )
+```
+
+I use the Labour Force Survey: Public Use Microdata file to do my analysis. I use all 12 months in the year 2022. This data set is particularly helpful for this analysis as it provides information on Canada’s working population’s labour market activities. The data set contains more than 1 million observations however I restrict my sample to people currently employed and working. As a result, my sample size contains 696, 324 observations however, I kept all *NAs* so this number changes throughout my regressions. I chose 13 variables and the ones of interest are hourly wage, job tenure, sex, and immigration status. Additionally, I create dummy variables, if necessary, to ensure I get the effects of different categories.
+
+# Empirical Methodology
+In order to obtain the effects on earnings, a linear model $(1)$ is specified.
+
+\begin{align}
+HRLYEARN = \alpha_0 + TENURE\alpha_1 + IMMIGRANT\alpha_2 + FEMALE \alpha_3 + Z\beta + \epsilon \\
+HRLYEARN =\hat{\alpha_0} + TENURE\hat{\alpha_1} + IMMIGRANT\hat{\alpha_2} + FEMALE\hat{\alpha_3} + Z\beta + \hat{\epsilon}
+\end{align}
+
+Then, I use OLS to estimate the model and get $(2)$. My dependent variable is hourly wages and my dependent variables of interest are job tenure, immigration status, and female. The rest of my dependent variables are in $Z\beta$. These variables control for factors that will influence hourly wages but am not interested in. My model will allow me to find causal effects of my independent variables on my dependent variable however, under a strong set of assumptions. 
+
+# Results
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# Perform the FWL Theorem
+# Residualize hourlyearn variable
+mod_y <- lm(hourlyearn~female + immigrant + 
+                ychild_clean + factor(AGE_12) +
+                factor(EDUC) + factor(MARSTAT) +
+                factor(EFAMTYPE) + factor(NAICS_21) + 
+                factor(NOC_43) + factor(PROV) +
+                factor(SURVMNTH), clean_2022)
+
+# Residualize tenure variable
+mod_x <- lm(jobtenure~female + immigrant + 
+              ychild_clean + factor(AGE_12) +
+              factor(EDUC) + factor(MARSTAT) +
+              factor(EFAMTYPE) + factor(NAICS_21) + 
+              factor(NOC_43) + factor(PROV) +
+              factor(SURVMNTH), clean_2022)
+
+# Add the calculated residuals in my dataset
+clean_2022 <- add_residuals(clean_2022, mod_y, var="residY") 
+clean_2022 <- add_residuals(clean_2022, mod_x, var="residX")
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# Plot residuals
+p <- clean_2022 %>% 
+  ggplot(aes(x = residX, y = residY)) +
+  geom_point(alpha = 0.8) +
+  geom_smooth(method = "lm", color = "red") + 
+  labs(x = "Residuals of Job Tenure",
+       y = "Residuals of Hourly Wages",
+       title = "Figure 1: Relationship between Earnings and Wages",
+       caption = "Data is from Labour Force Survey 2022 using all 12 months.")
+  
+p
+```
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# Full OLS regression
+mod_full <- lm(hourlyearn~jobtenure + female + immigrant + 
+                 ychild_clean + factor(AGE_12) +
+                 factor(EDUC) + factor(MARSTAT) +
+                 factor(EFAMTYPE) + factor(NAICS_21) + 
+                 factor(NOC_43) + factor(PROV) +
+                 factor(SURVMNTH), clean_2022)
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# Creates a table for the full OLS regression
+texreg(mod_full,
+       custom.coef.map = list("jobtenure" = "Job Tenure (yrs)",
+                              "female" = "Female",
+                              "immigrant" = "Immigrant"),
+       caption = "Full OLS",
+       caption.above = TRUE,
+       custom.note = ("\\parbox{.4\\linewidth}{\\vspace{2pt}%stars. \\\\
+       Table 2 also controls for whether person has child under 6, age, education, marital status, economic family type, job type, industry type, provinces, and survey month.}")
+       )
+```
+
+Table $(2)$ shows that when all variables are controlled for, a one-year increase in job tenure increases hourly wage by $0.29$ dollars, on average. Figure $(1)$ visualizes this small effect with an almost flat slope across the data points. Additionally, figure $(1)$ shows that there is no pattern within our residuals which means our key OLS assumption of homoskedasticity holds. Females make $3.19$ dollars less than males. While immigrants make $2.47$ dollars less than non-immigrants. 
+
+# Heterogeneity
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+mod_interact <- lm(hourlyearn~jobtenure + female + immigrant +
+                     jobtenure:immigrant + jobtenure:female +
+                 ychild_clean + factor(AGE_12) +
+                 factor(EDUC) + factor(MARSTAT) +
+                 factor(EFAMTYPE) + factor(NAICS_21) + 
+                 factor(NOC_43) + factor(PROV) +
+                 factor(SURVMNTH), clean_2022)
+
+texreg(mod_interact,
+       custom.coef.map = list("jobtenure" = "Job Tenure (yrs)",
+                              "female" = "Female",
+                              "immigrant" = "Immigrant",
+                              "jobtenure:immigrant" = "Tenure*Immigrant",
+                              "jobtenure:female" = "Tenure*Female"),
+       caption = "Interaction OLS",
+       caption.above = TRUE,
+       custom.note = ("\\parbox{.4\\linewidth}{\\vspace{2pt}%stars. \\\\
+       Table 3 also controls for whether person has child under 6, age, education, marital status, economic family type, job type, industry type, provinces, and survey month.}")
+       )
+```
+
+In table $(3)$, when variables are interacted, the standard errors in female and immigrant increases. An explanation for this is that we are allowing for correlation. An extra year of job tenure increases hourly wages by $0.32$ cents. While females make $2.76$ dollars less than males. Immigrants make $2.51$ dollars less than non-immigrants. When tenure and immigrant are interacted, there is minimal effect on average. This is the same case when tenure is interacted with female. 
+
+# Robustness
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# Heteroskedasticity
+mod_robust <- lm_robust(hourlyearn~jobtenure + female + immigrant + 
+                   ychild_clean + factor(AGE_12) +
+                   factor(EDUC) + factor(MARSTAT) +
+                   factor(EFAMTYPE) + factor(NAICS_21) + 
+                   factor(NOC_43) + factor(PROV) +
+                   factor(SURVMNTH), clean_2022)
+
+# Clustered SE at the province level
+# Take 2% of the sample as any more takes over 3 hours and overheats my laptop
+smpl_dt <- clean_2022 %>% sample_frac(0.02)
+mod_cluster <- lm_robust(hourlyearn~jobtenure + female + immigrant + 
+                           ychild_clean + factor(AGE_12) +
+                           factor(EDUC) + factor(MARSTAT) +
+                           factor(EFAMTYPE) + factor(NAICS_21) + 
+                           factor(NOC_43) + factor(PROV) +
+                           factor(SURVMNTH), smpl_dt, clusters = PROV
+                         )
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# Create table with 3 columns
+texreg(l = list(mod_full, mod_robust, mod_cluster),
+       custom.model.names = c("Full OLS", "Heteroskedasticty", "Clustered"),
+       custom.coef.map = list("jobtenure" = "Job Tenure (yrs)",
+                              "female" = "Female",
+                              "immigrant" = "Immigrant"),
+       caption = "Regression Comparisons",
+       caption.above = TRUE,
+       custom.note = ("\\parbox{.7\\linewidth}{\\vspace{2pt}%stars. \\\\
+       Table 4 also controls for whether person has child under 6, age, education, marital status, economic family type, job type, industry type, provinces, and survey month.}"),
+       include.ci = FALSE
+       )
+```
+
+Table $(4)$ shows that columns full OLS and heteroscedasticity are similar. The similarities in the two columns can be seen in Figure $(1)$. The residuals show constant variance between tenure and hourly wage. When robust standard errors are applied, the goal is to ensure the assumption of constant variance holds. Since it already holds prior to robust standard errors, we get similar estimates.
+
+The results from clustered standard errors are on par with effects on job tenure and immigrants while female varies. On average, females make $3.77$ dollars less than males, when we cluster in provinces. Though, these results may be biased due to the reduced sample size. As expected, since we are allowing for correlation, standard errors are much higher as opposed to the previous estimates.
+
+# Conclusion
+
+This paper investigates returns to experience with an employer on earnings and how it differs among females and immigrants. I estimate a model using OLS and find that females make $3.19$ dollars less than males, in hourly wages. While immigrants' hourly wages decrease by $2.47$ dollars on average, compared to non immigrants. When I use robust standard errors, the results are exactly the same. Additionally, I cluster within provinces and find that females earn an average hourly wage of $3.77$ dollars less compared to men. Moreover, effects on immigrants are similar to my other estimates. However, a reduced sample size and increased standard errors should be noted when I cluster within provinces. In three different estimates, an increase in job tenure seem to have similar but minimal effects on average hourly wages, varying between $0.27$ and $0.30$.
+
+Results show that policy implications should be directed towards supporting women and immigrants, rather than increasing job experience. For females, the gender wage gap has been prevalent. Much of this is due to the reduction in work hours after the birth of the first child [@gold]. There is no policy intervention regarding having a child, as that is entirely the woman's choice. However, examples to reduce the wage gap are: promoting diversity and inclusion within the workplace and addressing wage discrimination. For immigrants, providing support to adjust to the country's standards may help them seek opportunities that provide higher wages. For example, English lessons, as communication is an important skill. Additionally, investing towards on the job training for immigrants, may give them the necessary tools to adapt to Canada's working environment. 
+
+\newpage
+
+# References
